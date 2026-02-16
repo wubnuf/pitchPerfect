@@ -43,7 +43,7 @@ def run_pipeline():
 
 @app.route("/")
 def index():
-    return "Welcome to the ADB OCR App. POST to /run with { passkey: 'your_password' } to execute."
+    return "Welcome to PitchPerfect. POST to /run with { passkey: 'your_password' } to execute."
 
 
 if __name__ == "__main__":

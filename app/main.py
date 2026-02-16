@@ -1,31 +1,27 @@
 # app/main.py
 
-import asyncio
 import time
 import os
 import openai
 import cv2
 import uuid
 from dotenv import load_dotenv
-from multiprocessing import Process, freeze_support, set_start_method
-from ppadb.client import Client as AdbClient
 
 # Import your prompt engine weight updater
 from prompt_engine import update_template_weights
 from config import OPENAI_API_KEY
 
-# Import your existing helper functions
+# Import helper functions (now using pyautogui for laptop control)
 from helper_functions import (
     connect_device,
-    connect_device_remote,
     get_screen_resolution,
     open_hinge,
     swipe,
     capture_screenshot,
-    extract_text_from_image,  # If you want to keep your original OCR or unify with text_analyzer
+    extract_text_from_image,
     do_comparision,
     find_icon,
-    generate_comment,  # If you're using the advanced prompt_engine, you can rename or unify
+    generate_comment,
     tap,
     input_text,
 )
@@ -40,22 +36,19 @@ from data_store import (
 openai.api_key = OPENAI_API_KEY
 
 
-# async def main():
 def main():
-    # device = connect_device_remote(os.getenv("DEVICE_IP", "127.0.0.1"))
-    device = connect_device("127.0.0.1")
+    device = connect_device()
     if not device:
         return
 
-    width, height = get_screen_resolution(device)
+    width, height = get_screen_resolution()
 
-    # Approximate coordinates based on experimentation
+    # Approximate coordinates based on screen proportions
     x_select_like_button_approx = int(width * 0.90)
-    # y_select_like_button_approx = int(height * 0.67 * 0.75)
     y_select_like_button_approx = int(height * 0.67)
 
-    x_select_comment_button_approx = 540
-    y_select_comment_button_approx = 1755
+    x_select_comment_button_approx = int(width * 0.50)
+    y_select_comment_button_approx = int(height * 0.75)
 
     x_select_done_button_approx = int(width * 0.85)
     y_select_done_button_approx = int(height * 0.50)
@@ -94,7 +87,7 @@ def main():
         swipe(device, x1_swipe, y1_swipe, x2_swipe, y2_swipe)
         screenshot_path = capture_screenshot(device, "screen")
 
-        # OCR for text extraction (or direct from text_analyzer, whichever you prefer)
+        # OCR for text extraction
         current_profile_text = extract_text_from_image(screenshot_path).strip()
         if not current_profile_text:
             print("Warning: OCR returned empty text.")
@@ -123,53 +116,25 @@ def main():
             and x_select_like_button is not None
             and y_select_like_button is not None
         ):
-            # Generate a comment using your advanced logic or the existing generate_comment
-            # For demonstration, let's assume your 'generate_comment' calls GPT-4, etc.
             comment = (
                 generate_comment(current_profile_text) or "Hey, I'd love to meet up!"
             )
             print(f"Generated Comment: {comment}")
 
-            # Create a comment_id to track feedback
             comment_id = str(uuid.uuid4())
 
-            # Optionally store the generated comment for analytics
-            # If you used a comedic template, "style_used" might be "comedic", etc.
             store_generated_comment(
                 comment_id=comment_id,
                 profile_text=current_profile_text,
                 generated_comment=comment,
-                style_used="unknown",  # Could be comedic/flirty if you parse from the template
+                style_used="unknown",
             )
 
-            # Tap Like
+            # Click Like
             tap(device, x_select_like_button, y_select_like_button)
             print("Like tapped at:", x_select_like_button, y_select_like_button)
 
-            # Tap to open comment field
-            # tap(device, x_select_comment_button_approx, y_select_comment_button_approx)
-
-            # Type the comment (working somewhat)
-            # input_text(device, comment)
-            # capture_screenshot(device, "screen_after_message")
-            # time.sleep(100)
-            # swipe(device, width * 0.65, height * 0.82, width * 0.75, height * 0.82)
-
-            # while input_text(device, comment):
-            #     capture_screenshot(device, "screen_after_message")
-            #     time.sleep(0.5)
-            #     tap(
-            #         device,
-            #         x_select_comment_button_approx,
-            #         y_select_comment_button_approx,
-            #     )
-
-            # After some period, you could store feedback (maybe you get a callback or check the app)
-            # For demonstration, let's just store "match" or "no match" randomly
-            # store_feedback(comment_id=comment_id, outcome="match")
-
         else:
-            # If same profile text as previous, might be stuck
             if (
                 previous_profile_text == current_profile_text
                 and current_profile_text != ""
@@ -194,28 +159,17 @@ def main():
 
 
 def test():
-    height = 1080
-    width = 2340
+    width, height = get_screen_resolution()
     device = connect_device()
     comment = "Hi"
 
-    x_select_comment_button_approx = 540
-    y_select_comment_button_approx = 1755
+    x_select_comment_button_approx = int(width * 0.50)
+    y_select_comment_button_approx = int(height * 0.75)
 
     swipe(device, width * 0.50, height * 0.70, width * 0.55, height * 0.70)
     tap(device, x_select_comment_button_approx, y_select_comment_button_approx)
-    # Type the comment
     input_text(device, comment)
 
 
 if __name__ == "__main__":
-    # async run of main
-    # Windows fix for multiprocessing
-    # freeze_support()
-    # set_start_method("spawn", force=True)
-    # asyncio.run(main())
-
-    # Test for checking only input text
-    # test()
-
     main()
