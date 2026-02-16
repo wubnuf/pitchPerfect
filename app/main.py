@@ -2,16 +2,15 @@
 
 import time
 import os
-import openai
 import cv2
 import uuid
 from dotenv import load_dotenv
 
 # Import your prompt engine weight updater
 from prompt_engine import update_template_weights
-from config import OPENAI_API_KEY
+from config import AUTOMATION_BACKEND, LLM_BACKEND
 
-# Import helper functions (now using pyautogui for laptop control)
+# Import helper functions (supports OpenClaw and pyautogui backends)
 from helper_functions import (
     connect_device,
     get_screen_resolution,
@@ -33,10 +32,10 @@ from data_store import (
     calculate_template_success_rates,
 )
 
-openai.api_key = OPENAI_API_KEY
-
 
 def main():
+    print(f"Automation backend: {AUTOMATION_BACKEND}")
+    print(f"LLM backend: {LLM_BACKEND}")
     device = connect_device()
     if not device:
         return

@@ -1,20 +1,29 @@
 import time
 import os
-import pyautogui
 import numpy as np
 import cv2
 import pytesseract
-import openai
 from PIL import Image
 from dotenv import load_dotenv
 
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+from config import AUTOMATION_BACKEND, LLM_BACKEND
 
-# Safety setting: set to False to allow pyautogui to move to screen edges
-pyautogui.FAILSAFE = True
-# Add a small pause between pyautogui actions for reliability
-pyautogui.PAUSE = 0.3
+load_dotenv()
+
+# Conditionally import automation backends
+if AUTOMATION_BACKEND == "openclaw":
+    import openclaw_client
+else:
+    import pyautogui
+    pyautogui.FAILSAFE = True
+    pyautogui.PAUSE = 0.3
+
+# Conditionally import LLM backends
+if LLM_BACKEND == "lmstudio":
+    import lmstudio_client
+else:
+    import openai
+    openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 def find_icon(
@@ -108,41 +117,59 @@ def find_icon(
 
 
 def connect_device():
-    """
-    For laptop mode, there is no physical device to connect.
-    Returns a placeholder object. Screen interaction is done via pyautogui.
-    """
-    print("Running in laptop mode — no ADB device needed.")
-    return "laptop"
+    """Connect to automation backend."""
+    if AUTOMATION_BACKEND == "openclaw":
+        if openclaw_client.is_gateway_available():
+            print("Connected to OpenClaw Gateway.")
+            return "openclaw"
+        else:
+            print("Error: OpenClaw Gateway not reachable. Is the macOS app running?")
+            return None
+    else:
+        print("Running in laptop mode — no ADB device needed.")
+        return "laptop"
 
 
 def capture_screenshot(device, filename):
-    """Capture the laptop screen using pyautogui."""
+    """Capture the screen using the active automation backend."""
     os.makedirs("images", exist_ok=True)
-    screenshot = pyautogui.screenshot()
     path = "images/" + str(filename) + ".png"
-    screenshot.save(path)
-    return path
+
+    if AUTOMATION_BACKEND == "openclaw":
+        return openclaw_client.canvas_snapshot(output_path=path)
+    else:
+        screenshot = pyautogui.screenshot()
+        screenshot.save(path)
+        return path
 
 
 def tap(device, x, y):
-    """Click at (x, y) on the laptop screen."""
-    pyautogui.click(x, y)
+    """Click at (x, y) using the active automation backend."""
+    if AUTOMATION_BACKEND == "openclaw":
+        openclaw_client.canvas_click(int(x), int(y))
+    else:
+        pyautogui.click(x, y)
 
 
 def input_text(device, text):
-    """Type text using the laptop keyboard."""
+    """Type text using the active automation backend."""
     print("text to be written: ", text)
-    pyautogui.typewrite(text, interval=0.03)
+    if AUTOMATION_BACKEND == "openclaw":
+        openclaw_client.canvas_type(text)
+    else:
+        pyautogui.typewrite(text, interval=0.03)
 
 
 def swipe(device, x1, y1, x2, y2, duration=500):
-    """Simulate a swipe/drag on the laptop screen."""
-    duration_seconds = duration / 1000.0
-    pyautogui.moveTo(x1, y1)
-    pyautogui.mouseDown()
-    pyautogui.moveTo(x2, y2, duration=duration_seconds)
-    pyautogui.mouseUp()
+    """Simulate a swipe/drag using the active automation backend."""
+    if AUTOMATION_BACKEND == "openclaw":
+        openclaw_client.canvas_swipe(int(x1), int(y1), int(x2), int(y2), duration)
+    else:
+        duration_seconds = duration / 1000.0
+        pyautogui.moveTo(x1, y1)
+        pyautogui.mouseDown()
+        pyautogui.moveTo(x2, y2, duration=duration_seconds)
+        pyautogui.mouseUp()
 
 
 def extract_text_from_image(image_path):
@@ -189,34 +216,53 @@ def generate_comment(profile_text):
 
     Comment:
     """
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a friendly and likable person who is witty and humorous",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=1500,
-        temperature=0.7,
-    )
 
-    comment = response.choices[0].message["content"].strip()
-    return comment
+    if LLM_BACKEND == "lmstudio":
+        return lmstudio_client.chat_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a friendly and likable person who is witty and humorous",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=150,
+            temperature=0.7,
+        )
+    else:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a friendly and likable person who is witty and humorous",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=1500,
+            temperature=0.7,
+        )
+        return response.choices[0].message["content"].strip()
 
 
 def get_screen_resolution(device=None):
-    """Get the laptop screen resolution using pyautogui."""
-    width, height = pyautogui.size()
-    print("screen size: ", f"{width}x{height}")
-    return width, height
+    """Get screen resolution using the active automation backend."""
+    if AUTOMATION_BACKEND == "openclaw":
+        w, h = openclaw_client.get_screen_size_via_canvas()
+        print("screen size: ", f"{w}x{h}")
+        return w, h
+    else:
+        width, height = pyautogui.size()
+        print("screen size: ", f"{width}x{height}")
+        return width, height
 
 
 def open_hinge(device=None):
-    """
-    On laptop, Hinge should already be open in a browser or emulator.
-    This is a no-op — the user is expected to have the Hinge window visible.
-    """
-    print("Laptop mode: Please ensure Hinge is open and visible on your screen.")
-    time.sleep(2)
+    """Open Hinge in the browser via the active automation backend."""
+    if AUTOMATION_BACKEND == "openclaw":
+        print("OpenClaw mode: Navigating to Hinge web...")
+        openclaw_client.canvas_navigate("https://hinge.co/app")
+        time.sleep(3)
+    else:
+        print("Laptop mode: Please ensure Hinge is open and visible on your screen.")
+        time.sleep(2)

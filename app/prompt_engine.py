@@ -1,10 +1,13 @@
 # app/prompt_engine.py
 
-import openai
 import random
-from config import OPENAI_API_KEY
+from config import LLM_BACKEND, OPENAI_API_KEY
 
-openai.api_key = OPENAI_API_KEY
+if LLM_BACKEND == "lmstudio":
+    import lmstudio_client
+else:
+    import openai
+    openai.api_key = OPENAI_API_KEY
 
 COMEDIC_KEY = "comedic"
 FLIRTY_KEY = "flirty"
@@ -88,24 +91,38 @@ def generate_prompt(style_template: str, keywords: list, sentiment: str) -> str:
     return system_prompt
 
 
-def call_gpt4(prompt: str, temperature: float = 0.7, max_tokens: int = 150) -> str:
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=max_tokens,
-        temperature=temperature,
-    )
-    return response.choices[0].message["content"].strip()
+def call_llm(prompt: str, temperature: float = 0.7, max_tokens: int = 150) -> str:
+    """Call the configured LLM backend (LM Studio or OpenAI GPT-4)."""
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": prompt},
+    ]
+
+    if LLM_BACKEND == "lmstudio":
+        return lmstudio_client.chat_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    else:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return response.choices[0].message["content"].strip()
+
+
+# Keep backward-compatible alias
+call_gpt4 = call_llm
 
 
 def generate_comment(profile_text: str) -> str:
     """
     1. Clean & analyze text
     2. Choose a template
-    3. Call GPT-4
+    3. Call LLM
     Return the final comment string.
     """
     from text_analyzer import clean_text, extract_keywords, analyze_sentiment
@@ -116,5 +133,5 @@ def generate_comment(profile_text: str) -> str:
 
     style_template = choose_template(sentiment, keywords)
     final_prompt = generate_prompt(style_template, keywords, sentiment)
-    generated_text = call_gpt4(final_prompt)
+    generated_text = call_llm(final_prompt)
     return generated_text
